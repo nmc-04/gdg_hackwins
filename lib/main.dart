@@ -16,12 +16,19 @@ class ShareMyMedsApp extends StatelessWidget {
     return MaterialApp(
       title: 'ShareMyMeds',
       debugShowCheckedModeBanner: false,
+
+      // 🔥 App theme (matches your logo colors)
       theme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF2EB67D),
-        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
+        colorSchemeSeed: const Color(0xFF2EB67D), // green from logo
+        scaffoldBackgroundColor: const Color(0xFFFFFFFF),
+        fontFamily: 'Roboto',
       ),
+
+      // 👇 Home page when app opens
       initialRoute: '/home',
+
+      // 👇 Navigation routes
       routes: {
         '/home': (context) => const HomeScreen(),
         '/login': (context) => const LoginScreen(),
