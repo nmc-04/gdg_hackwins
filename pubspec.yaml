@@ -1,5 +1,6 @@
 name: med_donation_app
-description: Medicine Donation App
+description: Medicine Donation App - UI Prototype
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
@@ -10,5 +11,12 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.6
 
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/images/logo.png

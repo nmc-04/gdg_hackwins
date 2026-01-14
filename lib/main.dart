@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'routes/app_routes.dart';
 import 'core/app_theme.dart';
+import 'routes/app_routes.dart';
 import 'screens/auth/login_screen.dart';
 
 void main() {
@@ -13,7 +13,7 @@ class MedDonationApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Medicine Donation',
+      title: 'Med Donation App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       initialRoute: LoginScreen.routeName,

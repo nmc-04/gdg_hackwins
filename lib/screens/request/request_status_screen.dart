@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
-class MapScreen extends StatelessWidget {
-  static const routeName = '/map';
+class RequestStatusScreen extends StatelessWidget {
+  static const routeName = '/request_status';
 
-  const MapScreen({super.key});
+  const RequestStatusScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'Map Screen (Google Maps later)',
+        'Request Status Screen',
         style: TextStyle(fontSize: 22),
       ),
     );
   }
 }
+
