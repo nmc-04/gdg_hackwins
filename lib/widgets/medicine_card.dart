@@ -23,7 +23,7 @@ class MedicineCard extends StatelessWidget {
         subtitle: Text('Expiry: ${medicine.expiry} • Qty: ${medicine.quantity}'),
         trailing: StatusBadge(
           text: medicine.verified ? 'Verified' : 'Unverified',
-          color: medicine.verified ? AppTheme.lightTheme.primaryColor! : Colors.orange,
+          color: medicine.verified ? AppTheme.lightTheme.primaryColor : Colors.orange,
         ),
       ),
     );
