@@ -2,8 +2,11 @@ import 'dart:io';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class OcrService {
-  static Future<String> recognizeText(File imageFile) async {
+  /// Scans the given image file and returns recognized text
+  /// Works only on Android / iOS (ML Kit)
+  static Future<String> scanImage(File imageFile) async {
     final inputImage = InputImage.fromFile(imageFile);
+
     final textRecognizer =
         TextRecognizer(script: TextRecognitionScript.latin);
 
