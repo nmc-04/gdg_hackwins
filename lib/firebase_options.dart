@@ -83,4 +83,5 @@ class DefaultFirebaseOptions {
     authDomain: 'sharemymeds-80643.firebaseapp.com',
     storageBucket: 'sharemymeds-80643.firebasestorage.app',
   );
+
 }

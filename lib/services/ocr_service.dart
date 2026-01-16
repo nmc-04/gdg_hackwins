@@ -1,7 +1,17 @@
-// Stubbed OCR service - replace with ML Kit later
-class OCRService {
-  Future<String> scanMedicineText() async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    return "Paracetamol 500mg";
+import 'dart:io';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+
+class OcrService {
+  static Future<String> recognizeText(File imageFile) async {
+    final inputImage = InputImage.fromFile(imageFile);
+    final textRecognizer =
+        TextRecognizer(script: TextRecognitionScript.latin);
+
+    final RecognizedText recognizedText =
+        await textRecognizer.processImage(inputImage);
+
+    await textRecognizer.close();
+
+    return recognizedText.text;
   }
 }

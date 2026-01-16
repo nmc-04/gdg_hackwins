@@ -7,6 +7,8 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
+  google_mlkit_text_recognition: ^0.14.0
+  image_picker: ^1.0.7
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
