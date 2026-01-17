@@ -13,9 +13,9 @@ class ProfileScreen extends StatelessWidget {
           const CircleAvatar(radius: 34, child: Icon(Icons.person, size: 36)),
           const SizedBox(width: 12),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-            Text('Mrunmai Dhoble', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('ABC', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             SizedBox(height: 4),
-            Text('mrunmai@example.com'),
+            Text('abc@gmail.com'),
           ])
         ]),
         const SizedBox(height: 20),

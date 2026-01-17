@@ -22,6 +22,9 @@ dependencies:
   # IMAGE PROCESSING - ADDED FOR OCR IMPROVEMENT
   image: ^4.1.7
   
+  # Permissions
+  permission_handler: ^11.0.3  # ADD THIS LINE
+  
   # Firebase
   firebase_core: ^4.3.0
   firebase_auth: ^6.1.3

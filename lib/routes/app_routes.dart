@@ -6,7 +6,7 @@ import '../screens/auth/register_screen.dart';
 import '../screens/home/home_screen.dart';
 
 import '../screens/donate/scan_medicine_screen.dart';
-import '../screens/donate/add_medicine_screen.dart';
+import '../screens/donate/add_medicine_screen.dart' as donate_screen;
 import '../screens/donate/donate_success_screen.dart';
 
 import '../screens/request/medicine_list_screen.dart';
@@ -24,7 +24,8 @@ class AppRoutes {
     HomeScreen.routeName: (_) => const HomeScreen(),
 
     ScanMedicineScreen.routeName: (_) => const ScanMedicineScreen(),
-    AddMedicineScreen.routeName: (_) => const AddMedicineScreen(),
+    // Use alias to resolve ambiguous import
+    donate_screen.AddMedicineScreen.routeName: (_) => const donate_screen.AddMedicineScreen(),
     DonateSuccessScreen.routeName: (_) => const DonateSuccessScreen(),
 
     MedicineListScreen.routeName: (_) => const MedicineListScreen(),
