@@ -40,9 +40,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   child: Row(
                     children: [
-                      Text('ShareMyMeds', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.lightTheme.primaryColor)),
-                      const Spacer(),
-                      Image.asset('assets/images/logo.png', height: 44),
+                      Flexible(
+                        child: Text(
+                          'ShareMyMeds',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.lightTheme.primaryColor,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Image.asset(
+                        'assets/images/logo.png',
+                        height: 44,
+                        fit: BoxFit.contain,
+                      ),
                     ],
                   ),
                 ),

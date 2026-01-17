@@ -3,13 +3,16 @@ class MedicineModel {
   final String name;
   final String expiry;
   final int quantity;
-
+  
   /// Map-related (future use)
   final double latitude;
   final double longitude;
-
+  
   /// donation / request
   final String type;
+  
+  /// Verification status
+  final bool verified;
 
   MedicineModel({
     required this.id,
@@ -19,6 +22,7 @@ class MedicineModel {
     this.latitude = 0.0,
     this.longitude = 0.0,
     this.type = 'donation',
+    this.verified = false, // Added verified field with default value
   });
 
   Map<String, dynamic> toMap() {
@@ -30,6 +34,7 @@ class MedicineModel {
       'latitude': latitude,
       'longitude': longitude,
       'type': type,
+      'verified': verified, // Added verified to map
     };
   }
 
@@ -42,6 +47,7 @@ class MedicineModel {
       latitude: (map['latitude'] ?? 0).toDouble(),
       longitude: (map['longitude'] ?? 0).toDouble(),
       type: map['type'] ?? 'donation',
+      verified: map['verified'] ?? false, // Added verified from map with default
     );
   }
 }

@@ -28,43 +28,80 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
   File? _image;
   bool _loading = false;
+  String _debugOcrText = '';
 
-  /// ---------- CAMERA + OCR ----------
+  /// ---------- IMPROVED CAMERA + OCR ----------
   Future<void> _scanMedicine() async {
     if (kIsWeb) {
+      if (!mounted) return;
       showSnack(context, 'OCR scanning works on mobile only for now');
       return;
     }
 
-    final picked = await _picker.pickImage(source: ImageSource.camera);
+    final picked = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,        // Reduced from 100 for faster processing
+      maxWidth: 1920,          // Limit image size for better performance
+      maxHeight: 1920,         // Limit image size for better performance
+      preferredCameraDevice: CameraDevice.rear,
+    );
+
     if (picked == null) return;
+    if (!mounted) return;
 
     setState(() {
       _image = File(picked.path);
       _loading = true;
     });
 
-    final ocrText = await OcrService.scanImage(_image!);
-    _extractMedicineDetails(ocrText);
+    try {
+      final ocrText = await OcrService.scanImage(_image!);
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _debugOcrText = ocrText;
+      });
 
-    setState(() => _loading = false);
+      _extractMedicineDetails(ocrText);
+    } catch (e) {
+      if (!mounted) return;
+      showSnack(context, 'OCR failed: ${e.toString()}');
+      print('OCR Error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
-  /// ---------- SIMPLE OCR PARSER ----------
+  /// ---------- IMPROVED OCR EXTRACTION ----------
   void _extractMedicineDetails(String text) {
-    final lines = text.split('\n');
-
-    if (_name.text.isEmpty && lines.isNotEmpty) {
-      _name.text = lines.first;
+    final details = OcrService.extractMedicineDetails(text);
+    
+    if (details['name']!.isNotEmpty && _name.text.isEmpty) {
+      _name.text = details['name']!;
     }
-
-    final expMatch =
-        RegExp(r'(EXP|Exp|Expiry)[:\s]*(\d{2}/\d{2,4})')
-            .firstMatch(text);
-
-    if (expMatch != null) {
-      _expiry.text = expMatch.group(2)!;
+    
+    if (details['expiry']!.isNotEmpty && _expiry.text.isEmpty) {
+      _expiry.text = details['expiry']!;
     }
+    
+    if (details['name']!.isEmpty && details['expiry']!.isEmpty) {
+      showSnack(context, 'Could not extract info. Please enter manually.');
+    } else {
+      List<String> extracted = [];
+      if (details['name']!.isNotEmpty) extracted.add('Name');
+      if (details['expiry']!.isNotEmpty) extracted.add('Expiry');
+      showSnack(context, 'Extracted: ${extracted.join(' & ')}');
+    }
+    
+    print('=== OCR RAW TEXT ===');
+    print(text);
+    print('=== EXTRACTED DATA ===');
+    print('Name: ${details['name']}');
+    print('Expiry: ${details['expiry']}');
+    print('==================');
   }
 
   /// ---------- DONATE ----------
@@ -81,21 +118,57 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       name: _name.text,
       expiry: _expiry.text.isEmpty ? 'N/A' : _expiry.text,
       quantity: int.tryParse(_qty.text) ?? 1,
-
-      /// placeholders for now
       latitude: 0.0,
       longitude: 0.0,
       type: 'donation',
     );
 
-    await _firestore.addMedicine(med);
+    try {
+      await _firestore.addMedicine(med);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() => _loading = false);
+      setState(() => _loading = false);
 
-    showSnack(context, 'Medicine added successfully');
-    Navigator.pushNamed(context, '/donate_success');
+      showSnack(context, 'Medicine added successfully');
+      
+      if (!mounted) return;
+      
+      Navigator.pushNamed(
+        context,
+        '/donate_success',
+        arguments: {
+          'latitude': 0.0,
+          'longitude': 0.0,
+          'type': 'donation',
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showSnack(context, 'Error: ${e.toString()}');
+    }
+  }
+
+  /// ---------- SHOW DEBUG OCR TEXT ----------
+  void _showDebugDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('OCR Debug - Raw Text'),
+        content: SingleChildScrollView(
+          child: SelectableText(_debugOcrText.isEmpty 
+            ? 'No OCR text available. Scan a medicine first.' 
+            : _debugOcrText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -107,7 +180,14 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
           IconButton(
             icon: const Icon(Icons.camera_alt),
             onPressed: _scanMedicine,
+            tooltip: 'Scan medicine',
           ),
+          if (_debugOcrText.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              onPressed: _showDebugDialog,
+              tooltip: 'View OCR text',
+            ),
         ],
       ),
       body: Padding(
@@ -121,6 +201,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300, width: 2),
                     image: DecorationImage(
                       image: FileImage(_image!),
                       fit: BoxFit.cover,
@@ -128,36 +209,137 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                   ),
                 ),
 
+              Card(
+                color: Colors.blue.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.blue.shade200),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.lightbulb_outline, 
+                            color: Colors.blue.shade700, size: 20),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Scanning Tips',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.blue.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _buildTip('Good lighting (natural daylight works best)'),
+                      _buildTip('Hold camera steady to avoid blur'),
+                      _buildTip('Focus on medicine name & expiry date'),
+                      _buildTip('Keep medicine pack flat'),
+                      _buildTip('Avoid shadows and reflections'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
               TextField(
                 controller: _name,
-                decoration: const InputDecoration(labelText: 'Medicine name'),
+                decoration: InputDecoration(
+                  labelText: 'Medicine Name *',
+                  hintText: 'e.g., Paracetamol 500mg',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.medication),
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
 
               TextField(
                 controller: _expiry,
-                decoration:
-                    const InputDecoration(labelText: 'Expiry (MM/YYYY)'),
+                decoration: InputDecoration(
+                  labelText: 'Expiry Date',
+                  hintText: 'MM/YYYY',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.calendar_today),
+                ),
+                keyboardType: TextInputType.datetime,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
 
               TextField(
                 controller: _qty,
+                decoration: InputDecoration(
+                  labelText: 'Quantity',
+                  hintText: 'Number of tablets/strips',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.numbers),
+                ),
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity'),
               ),
               const SizedBox(height: 24),
 
               _loading
-                  ? const CircularProgressIndicator()
-                  : PrimaryButton(
-                      label: 'Donate',
-                      onPressed: _onDonate,
+                  ? Column(
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Processing...',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    )
+                  : SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: PrimaryButton(
+                        label: 'Donate Medicine',
+                        onPressed: _onDonate,
+                      ),
                     ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildTip(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('• ', style: TextStyle(color: Colors.blue.shade700, fontSize: 16)),
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(color: Colors.blue.shade900, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _expiry.dispose();
+    _qty.dispose();
+    super.dispose();
   }
 }
