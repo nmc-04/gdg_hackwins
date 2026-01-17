@@ -1,15 +1,13 @@
+// scan_medicine_screen.dart - FIXED VERSION (Without camera package)
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-
-import '../../services/ocr_service.dart';
-import '../../core/medicine_parser.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class ScanMedicineScreen extends StatefulWidget {
   static const String routeName = '/scan-medicine';
-
   const ScanMedicineScreen({super.key});
 
   @override
@@ -24,49 +22,37 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
   bool _showDebugInfo = false;
 
   Future<bool> _checkCameraPermission() async {
-    if (kIsWeb) return true; // Web doesn't need camera permissions
+    if (kIsWeb) return true;
 
-    // Check camera permission status
     var status = await Permission.camera.status;
-    
     if (!status.isGranted) {
-      // Request permission
       status = await Permission.camera.request();
-      
       if (!status.isGranted) {
         setState(() {
-          _errorMessage = 'Camera permission is required to scan medicines. '
-                          'Please enable it in app settings.';
+          _errorMessage = 'Camera permission required. Enable in settings.';
         });
         return false;
       }
     }
-    
     return true;
   }
 
   Future<void> _pickImage() async {
-    // Reset previous state
     setState(() {
       _errorMessage = '';
       _ocrDebugText = '';
       _showDebugInfo = false;
     });
 
-    // Camera doesn't work on Web for OCR
     if (kIsWeb) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Camera OCR works only on mobile devices'),
-          duration: Duration(seconds: 2),
-        ),
+        const SnackBar(content: Text('Camera OCR works only on mobile')),
       );
       return;
     }
 
     try {
-      // Check permissions first
       final hasPermission = await _checkCameraPermission();
       if (!hasPermission) return;
 
@@ -89,82 +75,258 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
         _errorMessage = '';
       });
 
-      // Small delay to show loading state
       await Future.delayed(const Duration(milliseconds: 300));
-
-      // Process the image
       await _processImage(file);
-
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMessage = 'Error: $e';
+        _errorMessage = 'Camera error: $e';
       });
-      debugPrint('Camera error: $e');
+      debugPrint('❌ Camera error: $e');
     }
   }
 
   Future<void> _processImage(File file) async {
     try {
-      // OCR SCAN
-      String rawText;
-      try {
-        rawText = await OcrService.scanImage(file);
-        
-        // Store for debugging
-        _ocrDebugText = rawText;
-        
-        // Show debug info if text is extracted
-        if (rawText.isNotEmpty) {
-          _showDebugInfo = true;
-        }
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _errorMessage = 'Failed to process image. Please try again.\nError: $e';
-        });
-        return;
-      }
+      debugPrint('🔄 Processing image...');
 
-      // Parse the text
+      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final inputImage = InputImage.fromFile(file);
+
+      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      final rawText = recognizedText.text;
+
+      debugPrint('📝 Extracted text length: ${rawText.length}');
+      debugPrint('📝 Raw text:\n$rawText');
+
+      setState(() {
+        _ocrDebugText = rawText;
+        _showDebugInfo = rawText.isNotEmpty;
+      });
+
       String medicineName = '';
       String expiryDate = '';
 
       if (rawText.isNotEmpty) {
-        try {
-          medicineName = MedicineParser.extractMedicineName(rawText);
-          expiryDate = MedicineParser.extractExpiryDate(rawText);
-        } catch (e) {
-          debugPrint('Parser error: $e');
-          // Fallback
-          final lines = rawText.split('\n');
-          if (lines.isNotEmpty) {
-            medicineName = lines.first.trim();
-            if (medicineName.length > 50) {
-              medicineName = '${medicineName.substring(0, 50)}...';
-            }
-          }
-        }
+        medicineName = _extractMedicineName(rawText);
+        expiryDate = _extractExpiryDate(rawText);
+        
+        debugPrint('✅ Medicine: $medicineName');
+        debugPrint('✅ Expiry: $expiryDate');
       }
+
+      await textRecognizer.close();
 
       if (!mounted) return;
 
-      setState(() {
-        _loading = false;
-      });
+      setState(() => _loading = false);
 
-      // Show results
       _showExtractionResult(medicineName, expiryDate, file, rawText);
-
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _errorMessage = 'Processing failed: $e';
       });
+      debugPrint('❌ Processing error: $e');
     }
+  }
+
+  String _extractMedicineName(String text) {
+    debugPrint('🔍 Extracting medicine name...');
+    
+    final lines = text.split('\n');
+    String? bestCandidate;
+    
+    for (var line in lines) {
+      line = line.trim();
+      
+      if (line.length < 3 || RegExp(r'^[\d\s\-\.\/]+$').hasMatch(line)) {
+        continue;
+      }
+      
+      if (RegExp(r'^[A-Z]{2,4}\d{5,8}$').hasMatch(line)) {
+        debugPrint('⏭️ Skipping batch number: $line');
+        continue;
+      }
+      
+      if (line.toLowerCase().contains('mfg') ||
+          line.toLowerCase().contains('expiry') ||
+          line.toLowerCase().contains('batch') ||
+          line.toLowerCase().contains('composition') ||
+          line.toLowerCase().contains('dosage') ||
+          line.toLowerCase().contains('storage') ||
+          line.toLowerCase().contains('schedule') ||
+          line.toLowerCase().contains('prescription')) {
+        continue;
+      }
+      
+      if (RegExp(r'[A-Z]+-\d+|[A-Za-z]+\s+\d+\s*mg', caseSensitive: false).hasMatch(line)) {
+        if (line.length >= 5 && line.length <= 50) {
+          debugPrint('✅ Found medicine name (pattern match): $line');
+          return line;
+        }
+      }
+      
+      if (bestCandidate == null && line.length >= 5 && line.length <= 50) {
+        if (RegExp(r'[A-Za-z]{3,}').hasMatch(line)) {
+          bestCandidate = line;
+        }
+      }
+    }
+    
+    if (bestCandidate != null) {
+      debugPrint('✅ Found medicine name (best candidate): $bestCandidate');
+      return bestCandidate;
+    }
+    
+    debugPrint('⚠️ No medicine name found');
+    return lines.isNotEmpty ? lines[0].trim() : '';
+  }
+
+  String _extractExpiryDate(String text) {
+    debugPrint('🔍 Extracting expiry date...');
+    debugPrint('Full OCR text:\n$text');
+    
+    final monthMap = {
+      'JAN': '01', 'JANUARY': '01',
+      'FEB': '02', 'FEBRUARY': '02',
+      'MAR': '03', 'MARCH': '03',
+      'APR': '04', 'APRIL': '04',
+      'MAY': '05',
+      'JUN': '06', 'JUNE': '06',
+      'JUL': '07', 'JULY': '07',
+      'AUG': '08', 'AUGUST': '08',
+      'SEP': '09', 'SEPT': '09', 'SEPTEMBER': '09',
+      'OCT': '10', 'OCTOBER': '10',
+      'NOV': '11', 'NOVEMBER': '11',
+      'DEC': '12', 'DECEMBER': '12',
+    };
+    
+    final lines = text.split('\n');
+    
+    // Strategy 1: Look for lines with "EXP" or "EXPIRY"
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final lowerLine = line.toLowerCase();
+      
+      debugPrint('Line $i: $line');
+      
+      if (lowerLine.contains('exp') || lowerLine.contains('mfg')) {
+        debugPrint('  ✓ Found exp/mfg keyword');
+        
+        // Check current and next line
+        for (int j = i; j <= i + 1 && j < lines.length; j++) {
+          final checkLine = lines[j];
+          debugPrint('  Checking line $j: $checkLine');
+          
+          // Pattern 1: Month name followed by year (AUG 2027, AUG-2027, AUG.2027)
+          for (var entry in monthMap.entries) {
+            final monthPattern = RegExp(
+              '${entry.key}[\\s\\.\\-]*(\\d{4})',
+              caseSensitive: false
+            );
+            final match = monthPattern.firstMatch(checkLine);
+            if (match != null) {
+              String year = match.group(1)!;
+              int yearNum = int.tryParse(year) ?? 0;
+              if (yearNum >= 2024 && yearNum <= 2035) {
+                String formattedDate = '${entry.value}/$year';
+                debugPrint('✅ Found expiry (month name): $formattedDate');
+                return formattedDate;
+              }
+            }
+          }
+          
+          // Pattern 2: MM/YYYY, MM-YYYY, MM.YYYY, MM YYYY
+          var numMatch = RegExp(r'(\d{1,2})[\s\/\.\-]+(\d{4})').firstMatch(checkLine);
+          if (numMatch != null) {
+            String month = numMatch.group(1)!;
+            String year = numMatch.group(2)!;
+            int? monthNum = int.tryParse(month);
+            int yearNum = int.tryParse(year) ?? 0;
+            
+            if (monthNum != null && monthNum >= 1 && monthNum <= 12 && yearNum >= 2024 && yearNum <= 2035) {
+              String formattedDate = '${month.padLeft(2, '0')}/$year';
+              debugPrint('✅ Found expiry (numeric): $formattedDate');
+              return formattedDate;
+            }
+          }
+          
+          // Pattern 3: DD/MM/YYYY or MM/DD/YYYY
+          var fullMatch = RegExp(r'(\d{1,2})[\s\/\.\-](\d{1,2})[\s\/\.\-](\d{2,4})').firstMatch(checkLine);
+          if (fullMatch != null) {
+            String part1 = fullMatch.group(1)!;
+            String part2 = fullMatch.group(2)!;
+            String year = fullMatch.group(3)!;
+            
+            if (year.length == 2) {
+              year = '20$year';
+            }
+            
+            int? num1 = int.tryParse(part1);
+            int? num2 = int.tryParse(part2);
+            int yearNum = int.tryParse(year) ?? 0;
+            
+            if (num1 != null && num2 != null && yearNum >= 2024 && yearNum <= 2035) {
+              String month = '';
+              
+              if (num1 > 12 && num2 <= 12) {
+                month = part2.padLeft(2, '0');
+              } else if (num2 > 12 && num1 <= 12) {
+                month = part1.padLeft(2, '0');
+              } else if (num1 <= 12) {
+                month = part1.padLeft(2, '0');
+              }
+              
+              if (month.isNotEmpty) {
+                String formattedDate = '$month/$year';
+                debugPrint('✅ Found expiry (full date): $formattedDate');
+                return formattedDate;
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Strategy 2: Fallback - search entire text without keyword requirement
+    debugPrint('Fallback: searching entire text...');
+    
+    for (var entry in monthMap.entries) {
+      final monthPattern = RegExp(
+        '${entry.key}[\\s\\.\\-]*(\\d{4})',
+        caseSensitive: false
+      );
+      final match = monthPattern.firstMatch(text);
+      if (match != null) {
+        String year = match.group(1)!;
+        int yearNum = int.tryParse(year) ?? 0;
+        if (yearNum >= 2024 && yearNum <= 2035) {
+          String formattedDate = '${entry.value}/$year';
+          debugPrint('✅ Found expiry (fallback month): $formattedDate');
+          return formattedDate;
+        }
+      }
+    }
+    
+    var anyNumMatch = RegExp(r'(\d{1,2})[\s\/\.\-](\d{4})').firstMatch(text);
+    if (anyNumMatch != null) {
+      String month = anyNumMatch.group(1)!;
+      String year = anyNumMatch.group(2)!;
+      int? monthNum = int.tryParse(month);
+      int yearNum = int.tryParse(year) ?? 0;
+      
+      if (monthNum != null && monthNum >= 1 && monthNum <= 12 && yearNum >= 2024 && yearNum <= 2035) {
+        String formattedDate = '${month.padLeft(2, '0')}/$year';
+        debugPrint('✅ Found expiry (fallback numeric): $formattedDate');
+        return formattedDate;
+      }
+    }
+    
+    debugPrint('⚠️ No expiry date found');
+    return '';
   }
 
   void _showExtractionResult(String name, String expiry, File image, String rawText) {
@@ -192,10 +354,7 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
                     color: Colors.grey.shade700,
                   ),
                 ),
-                Text(
-                  name,
-                  style: const TextStyle(fontSize: 16),
-                ),
+                Text(name, style: const TextStyle(fontSize: 16)),
                 const SizedBox(height: 12),
               ],
               
@@ -207,10 +366,7 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
                     color: Colors.grey.shade700,
                   ),
                 ),
-                Text(
-                  expiry,
-                  style: const TextStyle(fontSize: 16),
-                ),
+                Text(expiry, style: const TextStyle(fontSize: 16)),
                 const SizedBox(height: 12),
               ],
               
@@ -254,17 +410,13 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              // Navigate to add medicine screen
-              Navigator.pushNamed(
-                context,
-                '/add-medicine',
-                arguments: {
-                  'name': name,
-                  'expiry': expiry,
-                  'image': _image,
-                  'from_scan': true,
-                },
-              );
+              // FIXED: Properly return data to calling screen
+              Navigator.pop(context, {
+                'name': name,
+                'expiry': expiry,
+                'image': _image,
+                'from_scan': true,
+              });
             },
             child: const Text('Continue'),
           ),
@@ -288,18 +440,6 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
           ),
         ),
         actions: [
-          TextButton.icon(
-            icon: const Icon(Icons.copy),
-            onPressed: () {
-              // Copy to clipboard
-              // Clipboard.setData(ClipboardData(text: rawText));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Copied to clipboard')),
-              );
-              Navigator.pop(context);
-            },
-            label: const Text('Copy'),
-          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
@@ -334,6 +474,7 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
         _loading = false;
         _errorMessage = 'Gallery error: $e';
       });
+      debugPrint('❌ Gallery error: $e');
     }
   }
 
@@ -349,10 +490,7 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Get theme colors
-    final theme = Theme.of(context);
-    final primaryColor = theme.primaryColor;
-    final backgroundColor = theme.scaffoldBackgroundColor;
+    final primaryColor = Colors.blue;
     
     return Scaffold(
       appBar: AppBar(
@@ -375,287 +513,247 @@ class _ScanMedicineScreenState extends State<ScanMedicineScreen> {
         ],
       ),
       body: SafeArea(
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          color: backgroundColor,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Top Section - Instructions
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        // Scan Instructions Card
-                        Card(
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  Icons.medical_services,
-                                  size: 64,
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.medical_services,
+                                size: 64,
+                                color: primaryColor,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Scan Medicine Label',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
                                   color: primaryColor,
                                 ),
-                                const SizedBox(height: 16),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Position medicine label in frame with good lighting for best results.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.lightbulb_outline, color: primaryColor),
+                                const SizedBox(width: 8),
                                 Text(
-                                  'Scan Medicine Label',
+                                  'Scanning Tips',
                                   style: TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: primaryColor,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Position the medicine label within the frame and ensure good lighting for best results.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey.shade600,
-                                    height: 1.5,
-                                  ),
-                                ),
                               ],
                             ),
-                          ),
+                            const SizedBox(height: 12),
+                            _buildTip('• Use natural or bright indoor light'),
+                            _buildTip('• Hold camera steady'),
+                            _buildTip('• Focus on name & expiry date'),
+                            _buildTip('• Keep label flat, avoid shadows'),
+                            _buildTip('• Ensure text is clear'),
+                          ],
                         ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Tips Card
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      if (_image != null && !_loading)
                         Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Color.alphaBlend(
-                              primaryColor.withAlpha(20),
-                              Colors.white,
-                            ),
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Color.alphaBlend(
-                                primaryColor.withAlpha(100),
-                                Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withAlpha(25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
                               ),
-                            ),
+                            ],
                           ),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.lightbulb_outline, 
-                                    color: primaryColor,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Scanning Tips',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: primaryColor,
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                'Captured Image',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
                               ),
                               const SizedBox(height: 12),
-                              _buildTip('• Use natural daylight or bright indoor light', primaryColor),
-                              _buildTip('• Hold camera steady to avoid blur', primaryColor),
-                              _buildTip('• Focus on medicine name and expiry date', primaryColor),
-                              _buildTip('• Keep the label flat and avoid shadows', primaryColor),
-                              _buildTip('• Ensure text is clear and not reflective', primaryColor),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  _image!,
+                                  height: 180,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        
-                        const SizedBox(height: 20),
-                        
-                        // Image Preview
-                        if (_image != null && !_loading)
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withAlpha(25),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Captured Image',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(
-                                    _image!,
-                                    height: 180,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                
-                // Loading Indicator
-                if (_loading)
-                  Column(
-                    children: [
-                      CircularProgressIndicator(
-                        strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Processing image...',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
                     ],
                   ),
-                
-                // Error Message
-                if (_errorMessage.isNotEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade700),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _errorMessage,
-                            style: TextStyle(color: Colors.red.shade800),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                
-                // Action Buttons
+                ),
+              ),
+              
+              if (_loading)
                 Column(
                   children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: _pickImage,
-                        icon: const Icon(Icons.camera_alt),
-                        label: const Text(
-                          'Open Camera & Scan',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 3,
-                        ),
-                      ),
+                    CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                     ),
-                    
                     const SizedBox(height: 12),
-                    
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: OutlinedButton.icon(
-                        onPressed: _openGallery,
-                        icon: Icon(Icons.photo_library, color: primaryColor),
-                        label: Text(
-                          'Choose from Gallery',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: primaryColor,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: primaryColor),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
+                    Text(
+                      'Processing image...',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                     ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushNamed(
-                          context,
-                          '/add-medicine',
-                          arguments: {
-                            'name': '',
-                            'expiry': '',
-                            'image': null,
-                            'from_scan': false,
-                          },
-                        );
-                      },
-                      child: Text(
-                        'Enter details manually instead',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
-              ],
-            ),
+              
+              if (_errorMessage.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage,
+                          style: TextStyle(color: Colors.red.shade800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              
+              Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: _pickImage,
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text(
+                        'Open Camera & Scan',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 3,
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 12),
+                  
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: _openGallery,
+                      icon: Icon(Icons.photo_library, color: primaryColor),
+                      label: Text(
+                        'Choose from Gallery',
+                        style: TextStyle(fontSize: 16, color: primaryColor),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: primaryColor),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 8),
+                  
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context, {
+                        'name': '',
+                        'expiry': '',
+                        'image': null,
+                        'from_scan': false,
+                      });
+                    },
+                    child: Text(
+                      'Enter details manually instead',
+                      style: TextStyle(fontSize: 14, color: primaryColor),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTip(String text, Color color) {
+  Widget _buildTip(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         text,
-        style: TextStyle(
-          fontSize: 14,
-          color: color,
-          height: 1.4,
-        ),
+        style: const TextStyle(fontSize: 14, height: 1.4),
       ),
     );
   }

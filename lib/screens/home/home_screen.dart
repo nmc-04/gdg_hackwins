@@ -152,24 +152,39 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const Divider(),
                   ListTile(
-                    leading: Icon(Icons.settings, color: Colors.grey[700]),
-                    title: const Text('Settings'),
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
-                  ),
-                  ListTile(
-                    leading: Icon(Icons.help_outline, color: Colors.grey[700]),
-                    title: const Text('Help & Support'),
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
-                  ),
-                  ListTile(
                     leading: Icon(Icons.logout, color: Colors.red[400]),
                     title: const Text('Logout'),
                     onTap: () {
                       Navigator.pop(context);
+                      // Show logout confirmation dialog
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Logout'),
+                          content: const Text('Are you sure you want to logout?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                Navigator.pushNamedAndRemoveUntil(
+                                  context,
+                                  '/login',
+                                  (route) => false,
+                                );
+                              },
+                              child: const Text('Logout'),
+                            ),
+                          ],
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -240,8 +255,315 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  bool _emergencyRequestActive = true;
+  String _emergencyStatus = 'Active';
+
+  void _handleEmergencyResponse() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.emergency,
+                    color: Colors.red,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Emergency Request',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Choose handover location',
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            
+            // Medicine Details
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.medication, color: Colors.blue[700], size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Required Medicine',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Insulin',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Thane area',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            const Text(
+              'Select Handover Location',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Pharmacy Option
+            _buildHandoverOption(
+              icon: Icons.local_pharmacy,
+              title: 'Nearby Pharmacy',
+              subtitle: 'Apollo Pharmacy, 1.2 km away',
+              color: Colors.blue,
+              onTap: () => _confirmHandover('Apollo Pharmacy'),
+            ),
+            const SizedBox(height: 12),
+            
+            // NGO Option
+            _buildHandoverOption(
+              icon: Icons.people,
+              title: 'NGO Center',
+              subtitle: 'Red Cross Society, 2.5 km away',
+              color: Colors.purple,
+              onTap: () => _confirmHandover('Red Cross Society'),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHandoverOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmHandover(String location) {
+    Navigator.pop(context); // Close the bottom sheet
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 60,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Medicine Handed Over!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Successfully delivered to $location',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.star, color: Colors.amber[700], size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    '+25 Points Earned',
+                    style: TextStyle(
+                      color: Colors.green[800],
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                setState(() {
+                  _emergencyRequestActive = false;
+                  _emergencyStatus = 'Booked';
+                });
+              },
+              child: const Text(
+                'Done',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -346,52 +668,103 @@ class DashboardPage extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Emergency Alert
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.warning, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Emergency Request',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Colors.red[800],
+          // Emergency Alert or Booked Status
+          if (_emergencyRequestActive)
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.warning, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Emergency Request',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.red[800],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Insulin needed urgently in Thane area',
-                    style: TextStyle(color: Colors.grey[700]),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () {},
-                      child: const Text('Respond to Request'),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'Insulin needed urgently in Thane area',
+                      style: TextStyle(color: Colors.grey[700]),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _handleEmergencyResponse,
+                        child: const Text('Respond to Request'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Request $_emergencyStatus',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.green,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Medicine handed over successfully',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
           const SizedBox(height: 24),
 

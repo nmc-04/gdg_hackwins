@@ -96,7 +96,7 @@ class MedicineDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final medicine = ModalRoute.of(context)!.settings.arguments as MedicineModel;
     final theme = Theme.of(context);
-    final primarySwatch = theme.primaryColor as MaterialColor;
+    final primaryColor = theme.primaryColor; // Fixed: Remove MaterialColor cast
     
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -131,13 +131,13 @@ class MedicineDetailScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: primarySwatch.shade50,
+                          color: primaryColor.withOpacity(0.1), // Fixed
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
                           Icons.medical_services,
                           size: 40,
-                          color: theme.primaryColor,
+                          color: primaryColor, // Fixed
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -264,11 +264,11 @@ class MedicineDetailScreen extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       radius: 28,
-                      backgroundColor: primarySwatch.shade100,
+                      backgroundColor: primaryColor.withOpacity(0.1), // Fixed
                       child: Icon(
                         Icons.person,
                         size: 24,
-                        color: theme.primaryColor,
+                        color: primaryColor, // Fixed
                       ),
                     ),
                     title: Text(
@@ -284,7 +284,7 @@ class MedicineDetailScreen extends StatelessWidget {
                         if (medicine.donorRating != null)
                           Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.star,
                                 size: 14,
                                 color: Colors.amber,
@@ -310,7 +310,7 @@ class MedicineDetailScreen extends StatelessWidget {
                         if (medicine.distance != null)
                           Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.location_pin,
                                 size: 14,
                                 color: Colors.grey,
@@ -399,8 +399,8 @@ class MedicineDetailScreen extends StatelessWidget {
                       onPressed: () {
                         // Request medicine
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Row(
+                          const SnackBar(
+                            content: Row(
                               children: [
                                 Icon(Icons.check_circle, color: Colors.white),
                                 SizedBox(width: 8),
@@ -416,7 +416,7 @@ class MedicineDetailScreen extends StatelessWidget {
                         medicine.urgent ? 'Request Urgently' : 'Request Medicine',
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: medicine.urgent ? Colors.red : theme.primaryColor,
+                        backgroundColor: medicine.urgent ? Colors.red : primaryColor, // Fixed
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),

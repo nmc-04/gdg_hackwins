@@ -40,14 +40,15 @@ class MedDonationApp extends StatelessWidget {
     return MaterialApp(
       title: 'ShareMyMeds',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme, // Use the getter
+      theme: AppTheme.lightTheme,
       initialRoute: LoginScreen.routeName,
       routes: AppRoutes.routes,
       builder: (context, child) {
         // Prevent text scaling
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: true, textScaler: TextScaler.linear(1.0),
+            alwaysUse24HourFormat: true, 
+            textScaler: TextScaler.linear(1.0),
           ),
           child: GestureDetector(
             onTap: () {
