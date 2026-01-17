@@ -3,31 +3,45 @@ class MedicineModel {
   final String name;
   final String expiry;
   final int quantity;
-  final bool verified;
+
+  /// Map-related (future use)
+  final double latitude;
+  final double longitude;
+
+  /// donation / request
+  final String type;
 
   MedicineModel({
     required this.id,
     required this.name,
     required this.expiry,
     required this.quantity,
-    this.verified = false,
+    this.latitude = 0.0,
+    this.longitude = 0.0,
+    this.type = 'donation',
   });
 
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'expiry': expiry,
-        'quantity': quantity,
-        'verified': verified,
-      };
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'expiry': expiry,
+      'quantity': quantity,
+      'latitude': latitude,
+      'longitude': longitude,
+      'type': type,
+    };
+  }
 
   factory MedicineModel.fromMap(Map<String, dynamic> map) {
     return MedicineModel(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      expiry: map['expiry'] ?? '',
-      quantity: map['quantity'] ?? 0,
-      verified: map['verified'] ?? false,
+      id: map['id'],
+      name: map['name'],
+      expiry: map['expiry'],
+      quantity: map['quantity'],
+      latitude: (map['latitude'] ?? 0).toDouble(),
+      longitude: (map['longitude'] ?? 0).toDouble(),
+      type: map['type'] ?? 'donation',
     );
   }
 }

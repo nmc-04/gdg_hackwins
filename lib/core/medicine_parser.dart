@@ -1,52 +1,36 @@
-class ParsedMedicine {
-  final String name;
-  final String expiryDate;
-
-  ParsedMedicine({
-    required this.name,
-    required this.expiryDate,
-  });
-}
-
 class MedicineParser {
-  /// Extract medicine name + expiry date from OCR text
-  static ParsedMedicine parse(String ocrText) {
-    final lines = ocrText
-        .split('\n')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    String medicineName = 'Unknown Medicine';
-    String expiryDate = 'Not Found';
-
-    // Medicine name → first meaningful long line
-    for (final line in lines) {
-      if (line.length > 5 &&
-          !line.toLowerCase().contains('mg') &&
-          !line.toLowerCase().contains('exp') &&
-          !line.toLowerCase().contains('mfg')) {
-        medicineName = line;
-        break;
-      }
-    }
-
-    // Expiry date patterns
-    final expiryRegex =
-        RegExp(r'(exp|expiry|use before)[^0-9]*(\d{2}[/\-]\d{2,4})',
-            caseSensitive: false);
+  /// Extract medicine name from OCR text
+  static String extractMedicineName(String text) {
+    final lines = text.split('\n');
 
     for (final line in lines) {
-      final match = expiryRegex.firstMatch(line);
-      if (match != null) {
-        expiryDate = match.group(2)!;
-        break;
-      }
+      final clean = line.trim();
+
+      // Skip useless lines
+      if (clean.isEmpty) continue;
+      if (clean.length < 4) continue;
+      if (clean.contains(RegExp(r'\d{2}/\d{2}'))) continue;
+      if (clean.toLowerCase().contains('expiry')) continue;
+      if (clean.toLowerCase().contains('exp')) continue;
+
+      // Return first valid-looking name
+      return clean;
     }
 
-    return ParsedMedicine(
-      name: medicineName,
-      expiryDate: expiryDate,
+    return '';
+  }
+
+  /// Extract expiry date (MM/YY or MM/YYYY)
+  static String extractExpiryDate(String text) {
+    final regExp = RegExp(
+      r'(0[1-9]|1[0-2])[\/\-](\d{2}|\d{4})',
     );
+
+    final match = regExp.firstMatch(text);
+    if (match != null) {
+      return match.group(0)!;
+    }
+
+    return '';
   }
 }

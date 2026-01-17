@@ -29,32 +29,28 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
   File? _image;
   bool _loading = false;
 
-  /// -------- CAMERA + OCR ----------
-Future<void> _scanMedicine() async {
-  if (kIsWeb) {
-    showSnack(context, 'OCR scanning works on mobile only for now');
-    return;
+  /// ---------- CAMERA + OCR ----------
+  Future<void> _scanMedicine() async {
+    if (kIsWeb) {
+      showSnack(context, 'OCR scanning works on mobile only for now');
+      return;
+    }
+
+    final picked = await _picker.pickImage(source: ImageSource.camera);
+    if (picked == null) return;
+
+    setState(() {
+      _image = File(picked.path);
+      _loading = true;
+    });
+
+    final ocrText = await OcrService.scanImage(_image!);
+    _extractMedicineDetails(ocrText);
+
+    setState(() => _loading = false);
   }
 
-  final picked =
-      await _picker.pickImage(source: ImageSource.camera);
-
-  if (picked == null) return;
-
-  setState(() {
-    _image = File(picked.path);
-    _loading = true;
-  });
-
-  final ocrText = await OcrService.scanImage(_image!);
-
-  _extractMedicineDetails(ocrText);
-
-  setState(() => _loading = false);
-}
-
-
-  /// -------- SIMPLE PARSER ----------
+  /// ---------- SIMPLE OCR PARSER ----------
   void _extractMedicineDetails(String text) {
     final lines = text.split('\n');
 
@@ -71,7 +67,7 @@ Future<void> _scanMedicine() async {
     }
   }
 
-  /// -------- DONATE ----------
+  /// ---------- DONATE ----------
   Future<void> _onDonate() async {
     if (_name.text.isEmpty) {
       showSnack(context, 'Enter medicine name');
@@ -85,13 +81,20 @@ Future<void> _scanMedicine() async {
       name: _name.text,
       expiry: _expiry.text.isEmpty ? 'N/A' : _expiry.text,
       quantity: int.tryParse(_qty.text) ?? 1,
+
+      /// placeholders for now
+      latitude: 0.0,
+      longitude: 0.0,
+      type: 'donation',
     );
 
     await _firestore.addMedicine(med);
 
+    if (!mounted) return;
+
     setState(() => _loading = false);
 
-    showSnack(context, 'Medicine added (prototype)');
+    showSnack(context, 'Medicine added successfully');
     Navigator.pushNamed(context, '/donate_success');
   }
 
@@ -104,7 +107,6 @@ Future<void> _scanMedicine() async {
           IconButton(
             icon: const Icon(Icons.camera_alt),
             onPressed: _scanMedicine,
-            tooltip: 'Scan medicine',
           ),
         ],
       ),
@@ -115,8 +117,8 @@ Future<void> _scanMedicine() async {
             children: [
               if (_image != null)
                 Container(
-                  margin: const EdgeInsets.only(bottom: 16),
                   height: 180,
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     image: DecorationImage(
@@ -128,26 +130,21 @@ Future<void> _scanMedicine() async {
 
               TextField(
                 controller: _name,
-                decoration: const InputDecoration(
-                  labelText: 'Medicine name',
-                ),
+                decoration: const InputDecoration(labelText: 'Medicine name'),
               ),
               const SizedBox(height: 10),
 
               TextField(
                 controller: _expiry,
-                decoration: const InputDecoration(
-                  labelText: 'Expiry (MM/YYYY)',
-                ),
+                decoration:
+                    const InputDecoration(labelText: 'Expiry (MM/YYYY)'),
               ),
               const SizedBox(height: 10),
 
               TextField(
                 controller: _qty,
-                decoration: const InputDecoration(
-                  labelText: 'Quantity',
-                ),
                 keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantity'),
               ),
               const SizedBox(height: 24),
 
